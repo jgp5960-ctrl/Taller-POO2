@@ -1,0 +1,377 @@
+import java.util.Scanner;
+import java.util.ArrayList;
+
+// Clase Cliente
+class ClienteBanco {
+    private String nombres;
+    private String apellidos;
+    private int edad;
+    private String documentoRepresentante;
+    private String nombreRepresentante;
+    
+    public ClienteBanco(String nombres, String apellidos, int edad) {
+        this.nombres = nombres;
+        this.apellidos = apellidos;
+        this.edad = edad;
+    }
+    
+    public void setRepresentante(String nombre, String documento) {
+        this.nombreRepresentante = nombre;
+        this.documentoRepresentante = documento;
+    }
+    
+    public String getNombres() { return nombres; }
+    public String getApellidos() { return apellidos; }
+    public int getEdad() { return edad; }
+    public boolean esMenor() { return edad < 18; }
+    public String getNombreRepresentante() { return nombreRepresentante; }
+    public String getDocumentoRepresentante() { return documentoRepresentante; }
+}
+
+// Clase abstracta CuentaBancaria
+abstract class CuentaBancaria {
+    protected String numeroCuenta;
+    protected ClienteBanco cliente;
+    protected double saldo;
+    protected ArrayList<String> transacciones;
+    
+    public CuentaBancaria(String numeroCuenta, ClienteBanco cliente, double montoInicial) {
+        this.numeroCuenta = numeroCuenta;
+        this.cliente = cliente;
+        this.saldo = montoInicial;
+        this.transacciones = new ArrayList<>();
+        transacciones.add("Apertura de cuenta: $" + montoInicial);
+    }
+    
+    public abstract String getTipoCuenta();
+    public abstract double calcularComisionDeposito(double monto);
+    public abstract void aplicarCierreMes();
+    
+    public String getNumeroCuenta() { return numeroCuenta; }
+    public double getSaldo() { return saldo; }
+    
+    public void depositar(double monto) {
+        double comision = calcularComisionDeposito(monto);
+        saldo += monto - comision;
+        transacciones.add("Depósito: +$" + monto + " | Comisión: -$" + comision);
+    }
+    
+    public boolean retirar(double monto, boolean cajeroPropio) {
+        double comision = cajeroPropio ? 0 : 4500;
+        double total = monto + comision;
+        
+        if (saldo >= total) {
+            saldo -= total;
+            String tipo = cajeroPropio ? "propio" : "externo";
+            transacciones.add("Retiro cajero " + tipo + ": -$" + monto + 
+                            (comision > 0 ? " | Comisión: -$" + comision : ""));
+            return true;
+        }
+        return false;
+    }
+    
+    public boolean transferir(double monto, CuentaBancaria destino) {
+        if (saldo >= monto) {
+            saldo -= monto;
+            destino.saldo += monto;
+            transacciones.add("Transferencia enviada a " + destino.getNumeroCuenta() + ": -$" + monto);
+            destino.transacciones.add("Transferencia recibida de " + numeroCuenta + ": +$" + monto);
+            return true;
+        }
+        return false;
+    }
+    
+    public void imprimirEstadoCuenta() {
+        System.out.println("\n========================================");
+        System.out.println("       ESTADO DE CUENTA");
+        System.out.println("========================================");
+        System.out.println("Tipo de cuenta: " + getTipoCuenta());
+        System.out.println("Número: " + numeroCuenta);
+        System.out.println("Titular: " + cliente.getNombres() + " " + cliente.getApellidos());
+        if (cliente.esMenor()) {
+            System.out.println("Representante: " + cliente.getNombreRepresentante());
+        }
+        System.out.println("Saldo actual: $" + String.format("%,.0f", saldo));
+        System.out.println("\n--- Transacciones ---");
+        for (String trans : transacciones) {
+            System.out.println("• " + trans);
+        }
+        System.out.println("========================================\n");
+    }
+}
+
+// Clase CuentaCorriente
+class CuentaCorriente extends CuentaBancaria {
+    private static final double TASA_MANTENIMIENTO = 0.015;
+    private static final double COMISION_CHEQUE = 3000;
+    
+    public CuentaCorriente(String numeroCuenta, ClienteBanco cliente, double montoInicial) {
+        super(numeroCuenta, cliente, montoInicial);
+    }
+    
+    @Override
+    public String getTipoCuenta() {
+        return "Cuenta Corriente";
+    }
+    
+    @Override
+    public double calcularComisionDeposito(double monto) {
+        if (monto < 500000) {
+            return 7000;
+        } else if (monto >= 500000 && monto < 2000000) {
+            return 5000 + (monto * 0.02);
+        } else if (monto >= 2000000 && monto <= 10000000) {
+            return 4000 + (monto * 0.02);
+        } else {
+            return monto * 0.033;
+        }
+    }
+    
+    public void emitirCheque(double monto) {
+        if (saldo >= (monto + COMISION_CHEQUE)) {
+            saldo -= (monto + COMISION_CHEQUE);
+            transacciones.add("Cheque emitido: -$" + monto + " | Comisión: -$" + COMISION_CHEQUE);
+        }
+    }
+    
+    @Override
+    public void aplicarCierreMes() {
+        double cargo = saldo * TASA_MANTENIMIENTO;
+        saldo -= cargo;
+        transacciones.add("Cargo mantenimiento mensual (1.5%): -$" + String.format("%.2f", cargo));
+    }
+}
+
+// Clase CuentaAhorro
+class CuentaAhorro extends CuentaBancaria {
+    private static final double TASA_RENDIMIENTO_ANUAL = 0.022;
+    
+    public CuentaAhorro(String numeroCuenta, ClienteBanco cliente, double montoInicial) {
+        super(numeroCuenta, cliente, montoInicial);
+    }
+    
+    @Override
+    public String getTipoCuenta() {
+        return "Cuenta de Ahorros";
+    }
+    
+    @Override
+    public double calcularComisionDeposito(double monto) {
+        if (monto < 500000) {
+            return 0; // Sin comisión
+        } else if (monto >= 500000 && monto < 2000000) {
+            return 3000 + (monto * 0.01);
+        } else if (monto >= 2000000 && monto <= 10000000) {
+            return 2000 + (monto * 0.005);
+        } else if (monto > 10000000 && monto < 100000000) {
+            return monto * 0.018;
+        } else {
+            return monto * 0.02;
+        }
+    }
+    
+    @Override
+    public void aplicarCierreMes() {
+        double rendimiento = (saldo * TASA_RENDIMIENTO_ANUAL) / 12;
+        saldo += rendimiento;
+        transacciones.add("Rendimiento mensual (2.2% anual): +$" + String.format("%.2f", rendimiento));
+    }
+}
+
+// Clase Principal
+public class SistemaBancario {
+    private static ArrayList<CuentaBancaria> cuentas = new ArrayList<>();
+    private static Scanner sc = new Scanner(System.in);
+    private static int contadorCuentas = 1000;
+    
+    public static void main(String[] args) {
+        boolean continuar = true;
+        
+        while (continuar) {
+            System.out.println("\n========================================");
+            System.out.println("        SISTEMA BANCARIO");
+            System.out.println("========================================");
+            System.out.println("1. Apertura de Cuentas");
+            System.out.println("2. Transferencias");
+            System.out.println("3. Cajero Automático");
+            System.out.println("4. Cierre de Mes (Estado de Cuenta)");
+            System.out.println("5. Salir");
+            System.out.print("Seleccione una opción: ");
+            
+            int opcion = sc.nextInt();
+            sc.nextLine();
+            
+            switch (opcion) {
+                case 1:
+                    aperturasCuentas();
+                    break;
+                case 2:
+                    realizarTransferencia();
+                    break;
+                case 3:
+                    cajeroAutomatico();
+                    break;
+                case 4:
+                    cierreDeMes();
+                    break;
+                case 5:
+                    continuar = false;
+                    System.out.println("¡Gracias por usar el sistema!");
+                    break;
+                default:
+                    System.out.println("Opción inválida");
+            }
+        }
+        
+        sc.close();
+    }
+    
+    private static void aperturasCuentas() {
+        System.out.println("\n--- APERTURA DE CUENTA ---");
+        
+        System.out.print("Nombres: ");
+        String nombres = sc.nextLine();
+        System.out.print("Apellidos: ");
+        String apellidos = sc.nextLine();
+        System.out.print("Edad: ");
+        int edad = sc.nextInt();
+        sc.nextLine();
+        
+        ClienteBanco cliente = new ClienteBanco(nombres, apellidos, edad);
+        
+        if (cliente.esMenor()) {
+            System.out.println("\n[Cliente menor de edad]");
+            System.out.print("Nombres del representante: ");
+            String nombreRep = sc.nextLine();
+            System.out.print("Documento del representante: ");
+            String docRep = sc.nextLine();
+            cliente.setRepresentante(nombreRep, docRep);
+        }
+        
+        System.out.println("\nTipo de cuenta:");
+        System.out.println("1. Cuenta de Ahorros");
+        System.out.println("2. Cuenta Corriente");
+        System.out.print("Opción: ");
+        int tipoCuenta = sc.nextInt();
+        sc.nextLine();
+        
+        System.out.print("Monto de apertura: $");
+        double monto = sc.nextDouble();
+        sc.nextLine();
+        
+        String numeroCuenta = "CTA-" + (contadorCuentas++);
+        CuentaBancaria cuenta;
+        
+        if (tipoCuenta == 1) {
+            cuenta = new CuentaAhorro(numeroCuenta, cliente, monto);
+            System.out.println("\n✓ Cuenta de Ahorros creada exitosamente");
+        } else {
+            if (monto < 200000) {
+                System.out.println("\n✗ El monto mínimo para cuenta corriente es $200,000");
+                return;
+            }
+            cuenta = new CuentaCorriente(numeroCuenta, cliente, monto);
+            System.out.println("\n✓ Cuenta Corriente creada exitosamente");
+        }
+        
+        cuentas.add(cuenta);
+        System.out.println("Número de cuenta: " + numeroCuenta);
+    }
+    
+    private static void realizarTransferencia() {
+        if (cuentas.size() < 2) {
+            System.out.println("\n✗ Se necesitan al menos 2 cuentas para transferir");
+            return;
+        }
+        
+        System.out.println("\n--- TRANSFERENCIA ---");
+        System.out.print("Número de cuenta origen: ");
+        String origen = sc.nextLine();
+        System.out.print("Número de cuenta destino: ");
+        String destino = sc.nextLine();
+        System.out.print("Monto a transferir: $");
+        double monto = sc.nextDouble();
+        sc.nextLine();
+        
+        CuentaBancaria cuentaOrigen = buscarCuenta(origen);
+        CuentaBancaria cuentaDestino = buscarCuenta(destino);
+        
+        if (cuentaOrigen != null && cuentaDestino != null) {
+            if (cuentaOrigen.transferir(monto, cuentaDestino)) {
+                System.out.println("\n✓ Transferencia exitosa");
+            } else {
+                System.out.println("\n✗ Saldo insuficiente");
+            }
+        } else {
+            System.out.println("\n✗ Cuenta(s) no encontrada(s)");
+        }
+    }
+    
+    private static void cajeroAutomatico() {
+        System.out.println("\n--- CAJERO AUTOMÁTICO ---");
+        System.out.print("Número de cuenta: ");
+        String numCuenta = sc.nextLine();
+        
+        CuentaBancaria cuenta = buscarCuenta(numCuenta);
+        if (cuenta == null) {
+            System.out.println("\n✗ Cuenta no encontrada");
+            return;
+        }
+        
+        System.out.println("\n1. Consultar saldo");
+        System.out.println("2. Retirar efectivo");
+        System.out.println("3. Depositar");
+        System.out.print("Opción: ");
+        int opcion = sc.nextInt();
+        sc.nextLine();
+        
+        switch (opcion) {
+            case 1:
+                System.out.println("\nSaldo disponible: $" + String.format("%,.0f", cuenta.getSaldo()));
+                break;
+            case 2:
+                System.out.print("Monto a retirar: $");
+                double montoRetiro = sc.nextDouble();
+                sc.nextLine();
+                System.out.print("¿Es cajero del banco? (S/N): ");
+                boolean propio = sc.nextLine().toUpperCase().equals("S");
+                
+                if (cuenta.retirar(montoRetiro, propio)) {
+                    System.out.println("\n✓ Retiro exitoso");
+                } else {
+                    System.out.println("\n✗ Saldo insuficiente");
+                }
+                break;
+            case 3:
+                System.out.print("Monto a depositar: $");
+                double montoDeposito = sc.nextDouble();
+                sc.nextLine();
+                cuenta.depositar(montoDeposito);
+                System.out.println("\n✓ Depósito exitoso");
+                break;
+        }
+    }
+    
+    private static void cierreDeMes() {
+        System.out.println("\n--- CIERRE DE MES ---");
+        System.out.print("Número de cuenta: ");
+        String numCuenta = sc.nextLine();
+        
+        CuentaBancaria cuenta = buscarCuenta(numCuenta);
+        if (cuenta != null) {
+            cuenta.aplicarCierreMes();
+            cuenta.imprimirEstadoCuenta();
+        } else {
+            System.out.println("\n✗ Cuenta no encontrada");
+        }
+    }
+    
+    private static CuentaBancaria buscarCuenta(String numeroCuenta) {
+        for (CuentaBancaria cuenta : cuentas) {
+            if (cuenta.getNumeroCuenta().equals(numeroCuenta)) {
+                return cuenta;
+            }
+        }
+        return null;
+    }
+}
